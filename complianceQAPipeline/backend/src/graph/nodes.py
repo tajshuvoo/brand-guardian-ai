@@ -24,60 +24,59 @@ logger = logging.getLogger("brand-gaurdian")
 logging.basicConfig(level=logging.INFO)
 
 #NODE 1: INDEXER
-def index_video_node(state:VideoAuditState) -> Dict[str, Any]:
-    """_summary_
-        Downloads the youtube video fro the url
-        Uploads to the azure video indexer
-        extracts the insights
-        
-    Args:
-        state (VideoAuditState): _description_
+def index_video_node(state: VideoAuditState) -> Dict[str, Any]:
 
-    Returns:
-        Dict[str, Any]: _description_
-    """
-    
-    video_url = state.get("video_url")
+    video_path = state.get("video_path")
     video_id_input = state.get("video_id", "vid_demo")
-    
-    logger.info(f"-----[Node:Indexer] Processing : {video_url}")
-    
-    local_filename= "temp_audit_video.mp4 "
-    
+
+    logger.info(f"-----[Node:Indexer] Processing : {video_path}")
+
+    if not video_path:
+        return {
+            "errors": ["No video path provided"],
+            "final_status": "FAIL",
+            "transcript": "",
+            "ocr_text": []
+        }
+
+    azure_video_id = None
+
     try:
         vi_service = VideoIndexerService()
-        #download 
-        if "youtube.com" in video_url or "youtu.be" in video_url:
-            local_path= vi_service.download_youtube_video(video_url, output_path= local_filename)
-        else:
-            raise Exception("Please provide a valid Youtube URL for this test")
-        
-        #upload 
-        azure_video_id = vi_service.upload_video(local_path, video_name= video_id_input)
+
+        # Upload local file
+        azure_video_id = vi_service.upload_video(
+            video_path=video_path,
+            video_name=video_id_input
+        )
+
         logger.info(f"Upload Success. Azure ID: {azure_video_id}")
-        
-        #cleanup
-        
-        if os.path.exists(local_path):
-            os.remove(local_path)
-        #wait
-        
+
+        # Wait until processed
         raw_insights = vi_service.wait_for_processing(azure_video_id)
-        #extract
+
+        # Extract transcript + OCR
         clean_data = vi_service.extract_data(raw_insights)
         logger.info("---[NODE: Indexer] Extraction Complete ---")
         return clean_data
-    
+
     except Exception as e:
-        logger.error(f"Video Indexer Failed : {e} ")
+        logger.error(f"Video Indexer Failed: {e}")
         return {
-            "errors":[str(e)],
+            "errors": [str(e)],
             "final_status": "FAIL",
             "transcript": "",
-            "ocr_text":[]   
+            "ocr_text": []
         }
 
-
+    finally:
+        # 🔥 Always cleanup Azure video
+        if azure_video_id:
+            try:
+                vi_service.delete_video(azure_video_id)
+            except Exception as cleanup_error:
+                logger.warning(f"Azure cleanup failed: {cleanup_error}")
+                
 #Node 2: Compliance Auditor
 def audio_content_node(state: VideoAuditState) -> Dict[str, Any]:
     """_summary_

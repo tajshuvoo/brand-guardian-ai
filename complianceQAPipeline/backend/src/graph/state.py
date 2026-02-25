@@ -24,7 +24,7 @@ class VideoAuditState(TypedDict):
     video_id: str
     
     #ingestion and extraction data
-    local_file_path: Optional[str]
+    video_path: Optional[str]
     video_metadata: Dict[str, Any]
     transcript: Optional[str]
     ocr_text: List[str]

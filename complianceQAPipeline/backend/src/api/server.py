@@ -2,7 +2,8 @@ import uuid
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware 
-
+from fastapi import UploadFile, File
+import os
 from pydantic import BaseModel
 from typing import List,Optional
 
@@ -35,15 +36,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class AuditRequest(BaseModel):
-    '''
-    Define the expected structure of incoming API requests
-    Example valid request:
-        {
-            "video_url":"https://youtu.be/xTpv9lc_qMw",
-        }
-    '''
-    video_url : str
+# class AuditRequest(BaseModel):
+#     '''
+#     Define the expected structure of incoming API requests
+#     Example valid request:
+#         {
+#             "video_url":"https://youtu.be/xTpv9lc_qMw",
+#         }
+#     '''
+#     video_url : str
     
 class ComplianceIssue(BaseModel):
     category: str
@@ -59,38 +60,49 @@ class AuditResponse(BaseModel):
     
     
     
-@app.post("/audit", response_model= AuditResponse)
-async def audit_video(request: AuditRequest):
-    '''
-    Main API endpoint that triggers the compliance audit workflow
-    '''
-    
+@app.post("/audit", response_model=AuditResponse)
+async def audit_video(file: UploadFile = File(...)):
+
     session_id = str(uuid.uuid4())
     video_id_short = f"vid_{session_id[:8]}"
-    logger.info(f"Recieved the Audit Request: {request.video_url} (Session: {session_id})")
-    
-    initial_inputs = {
-        "video_url":request.video_url,
-        "video_id":video_id_short,
-        "compliance_results": [],
-        "errors":[]
-    }
-    
+
+    logger.info(f"Received audit file: {file.filename} (Session: {session_id})")
+
+    temp_file_path = f"temp_{video_id_short}_{file.filename}"
+
     try:
+        # Save uploaded file temporarily
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(await file.read())
+
+        initial_inputs = {
+            "video_path": temp_file_path,
+            "video_id": video_id_short,
+            "compliance_results": [],
+            "errors": []
+        }
+
         final_state = compliance_graph.invoke(initial_inputs)
+
         return AuditResponse(
             session_id=session_id,
             video_id=final_state.get("video_id"),
-            status=final_state.get("final_status","UNKNOWN"),
+            status=final_state.get("final_status", "UNKNOWN"),
             final_report=final_state.get("final_report", "No Report Generated."),
-            compliance_results=final_state.get("compliance_results",[])
+            compliance_results=final_state.get("compliance_results", [])
         )
+
     except Exception as e:
         logger.error(f"Audit Failed: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Workflow Execution Failed : {str(e)}"
+            detail=f"Workflow Execution Failed: {str(e)}"
         )
+
+    finally:
+        # 🔥 Always delete local temp file
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
         
 @app.get("/health")
 def health_check():

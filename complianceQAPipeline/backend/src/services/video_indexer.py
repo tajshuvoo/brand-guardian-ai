@@ -6,7 +6,7 @@ import os
 import time
 import logging
 import requests
-import yt_dlp
+# import yt_dlp
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -53,59 +53,113 @@ class VideoIndexerService:
         return response.json().get("accessToken")
     
     #function to download the youtube video
-    def download_youtube_video(self, url, output_path="temp_video.mp4"):
-        '''
-        Downloads the youtube video to a local file
-        '''
+    # def download_youtube_video(self, url, output_path="temp_video.mp4"):
+    #     '''
+    #     Downloads the youtube video to a local file
+    #     '''
         
-        logger.info(f"Downloading Youtube video : {url}")
+    #     logger.info(f"Downloading Youtube video : {url}")
         
-        ydl_opts = {
-         'format': 'best',
-         'outtmpl': output_path,
-         'quiet': False,
-         'no_warnings': False,
-         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        }
+    #     ydl_opts = {
+    #      'format': 'best',
+    #      'outtmpl': output_path,
+    #      'quiet': False,
+    #      'no_warnings': False,
+    #      'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+    #      'http_headers': {
+    #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    #         }
+    #     }
         
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-            logger.info("Download Complete")
-            return output_path
-        except Exception as e:
-            raise Exception(f"Youtube vide download failed : {str(e)}")
+    #     try:
+    #         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    #             ydl.download([url])
+    #         logger.info("Download Complete")
+    #         return output_path
+    #     except Exception as e:
+    #         raise Exception(f"Youtube vide download failed : {str(e)}")
         
         
         
     #upload the video azure video indexer
-    def upload_video(self, video_path, video_name):
+    # def upload_video(self, video_path, video_name):
+    #     arm_token = self.get_access_token()
+    #     vi_token = self.get_account_token(arm_token)
+        
+    #     api_url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
+        
+    #     params = {
+    #         "accessToken": vi_token,
+    #         "name": video_name,
+    #         "privacy": "Private",
+    #         "indexingPreset": "Default"
+    #     }
+        
+    #     logger.info(f"Uploading file {video_path} to Azure")
+        
+    #     #open the file in binary and stream it on azure
+    #     # with open(video_path,'rb') as video_file:
+    #     #     files = {'file': video_file}
+    #     #     response = requests.post(api_url, params=params, files=files)
+    #     if response.status_code != 200:
+    #         raise Exception(f"Azure Upload Failed : {response.text}")
+    #     print("UPLOAD RESPONSE:", response.status_code)
+    #     print("UPLOAD RESPONSE BODY:", response.text)
+    #     return response.json().get("id")
+    
+    # def upload_video(self, youtube_url, video_name):
+    #     arm_token = self.get_access_token()
+    #     vi_token = self.get_account_token(arm_token)
+
+    #     api_url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
+
+    #     params = {
+    #         "accessToken": vi_token,
+    #         "name": video_name,
+    #         "videoUrl": youtube_url,  # 🔥 THIS IS THE KEY CHANGE
+    #         "privacy": "Private",
+    #         "indexingPreset": "Default"
+    #     }
+
+    #     logger.info(f"Submitting YouTube URL to Azure Video Indexer: {youtube_url}")
+
+    #     response = requests.post(api_url, params=params)
+
+    #     if response.status_code != 200:
+    #         raise Exception(f"Azure URL ingestion failed: {response.text}")
+
+    #     print("UPLOAD RESPONSE:", response.status_code)
+    #     print("UPLOAD RESPONSE BODY:", response.text)
+
+    #     return response.json().get("id")
+    def upload_video(self, video_path: str, video_name: str):
+        """
+        Uploads a local video file to Azure Video Indexer
+        """
+
         arm_token = self.get_access_token()
         vi_token = self.get_account_token(arm_token)
-        
+
         api_url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
-        
+
         params = {
             "accessToken": vi_token,
             "name": video_name,
             "privacy": "Private",
             "indexingPreset": "Default"
         }
-        
-        logger.info(f"Uploading file {video_path} to Azure")
-        
-        #open the file in binary and stream it on azure
-        with open(video_path,'rb') as video_file:
-            files = {'file': video_file}
+
+        logger.info(f"Uploading local file {video_path} to Azure Video Indexer")
+
+        with open(video_path, "rb") as video_file:
+            files = {"file": video_file}
             response = requests.post(api_url, params=params, files=files)
+
         if response.status_code != 200:
-            raise Exception(f"Azure Upload Failed : {response.text}")
-        print("UPLOAD RESPONSE:", response.status_code)
-        print("UPLOAD RESPONSE BODY:", response.text)
+            raise Exception(f"Azure Upload Failed: {response.text}")
+
         return response.json().get("id")
+    
         
     def wait_for_processing(self,video_id):
         logger.info(f"Waiting for the video {video_id} to process......")
@@ -153,3 +207,24 @@ class VideoIndexerService:
                 "platform":"youtube"
             }
         }
+    
+    def delete_video(self, video_id: str):
+        """
+        Deletes video from Azure Video Indexer
+        """
+
+        arm_token = self.get_access_token()
+        vi_token = self.get_account_token(arm_token)
+
+        url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}"
+
+        params = {"accessToken": vi_token}
+
+        logger.info(f"Deleting video {video_id} from Azure")
+
+        response = requests.delete(url, params=params)
+
+        if response.status_code not in [200, 204]:
+            raise Exception(f"Failed to delete video: {response.text}")
+
+        logger.info("Video deleted successfully")
