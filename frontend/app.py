@@ -55,7 +55,11 @@ if uploaded_file:
                         )
                     }
 
-                    response = requests.post(API_URL, files=files)
+                    response = requests.post(
+                        API_URL,
+                        files=files,
+                        timeout=600  # 10 minutes
+                    )
 
                     if response.status_code == 200:
                         data = response.json()
